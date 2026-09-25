@@ -1,0 +1,25 @@
+# Secrets
+.env
+*.env
+!.env.example
+
+# Private data - never commit resumes, job data or databases
+data/*
+!data/.gitkeep
+!data/vector_store/
+data/vector_store/*
+!data/vector_store/.gitkeep
+*.docx
+*.pdf
+!tests/fixtures/*.txt
+*.db
+*.sqlite*
+resumes/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.streamlit/secrets.toml
