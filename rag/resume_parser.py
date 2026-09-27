@@ -89,7 +89,9 @@ _HEADING_WORDS = re.compile(
     r"^(professional )?(summary|profile|objective|experience|professional experience|work experience|employment"
     r"( history)?|education|certifications?|certifications? (&|and) professional development|skills|technical skills|"
     r"core competencies|technology( & development)? stack|projects|selected (ai )?projects|ai portfolio.*|"
-    r"career focus|achievements|awards|languages|publications|interests)$",
+    r"career focus|achievements|awards|languages|publications|interests|key skills|skills summary|areas of expertise|"
+    r"technical expertise|core skills|tools|work history|career history|internships?|training|personal details|"
+    r"declaration|references|hobbies|strengths|profile summary|executive summary|about me|ai / llm)$",
     re.IGNORECASE,
 )
 
@@ -100,9 +102,7 @@ def _is_heading(line: str, style: str | None = None) -> bool:
         return False
     if style and style.lower().startswith("heading 1"):
         return True
-    if _HEADING_WORDS.match(stripped.rstrip(":")):
-        return True
-    return stripped.isupper() and 1 <= len(stripped.split()) <= 6 and not re.search(r"[|@\d]", stripped)
+    return bool(_HEADING_WORDS.match(stripped.rstrip(":")))
 
 
 def _extract_docx(data: bytes) -> tuple[list[str], list[str | None]]:
@@ -116,9 +116,11 @@ def _extract_docx(data: bytes) -> tuple[list[str], list[str | None]]:
         if not text:
             continue
         style = para.style.name if para.style is not None else None
+        is_list = bool(style and style.lower().startswith("list")) or para._p.pPr is not None and \
+            para._p.pPr.numPr is not None
         for piece in text.split("\n"):
             if piece.strip():
-                lines.append(piece.strip())
+                lines.append(("• " if is_list and not piece.strip().startswith("•") else "") + piece.strip())
                 styles.append(style)
     for table in document.tables:
         for row in table.rows:
@@ -130,7 +132,7 @@ def _extract_docx(data: bytes) -> tuple[list[str], list[str | None]]:
 
 
 def _extract_pdf(data: bytes) -> tuple[list[str], list[int]]:
-    import fitz  # PyMuPDF
+    import pymupdf as fitz  # PyMuPDF
 
     lines: list[str] = []
     pages: list[int] = []
@@ -140,7 +142,17 @@ def _extract_pdf(data: bytes) -> tuple[list[str], list[int]]:
                 if line.strip():
                     lines.append(line.strip())
                     pages.append(page_number)
-    return lines, pages
+    # Remove running headers/footers: page numbers and lines repeated on several pages.
+    page_count = len(set(pages))
+    seen_on: dict[str, set[int]] = {}
+    for line, page in zip(lines, pages):
+        seen_on.setdefault(line, set()).add(page)
+    keep = [
+        i for i, line in enumerate(lines)
+        if not re.fullmatch(r"(page\s*)?\d+(\s*(of|/)\s*\d+)?", line, re.IGNORECASE)
+        and not (page_count >= 2 and len(seen_on[line]) >= 2 and len(line) < 120)
+    ]
+    return [lines[i] for i in keep], [pages[i] for i in keep]
 
 
 def parse_resume(filename: str, data: bytes) -> ParsedResume:
@@ -155,8 +167,9 @@ def parse_resume(filename: str, data: bytes) -> ParsedResume:
         pages = list(page_numbers)
         styles = [None] * len(lines)
     else:
-        lines = [ln.strip().lstrip("#").strip() for ln in data.decode("utf-8").splitlines() if ln.strip()]
-        styles = [None] * len(lines)
+        raw_lines = [ln.strip() for ln in data.decode("utf-8").splitlines() if ln.strip()]
+        styles = ["Heading 1" if ln.startswith("#") else None for ln in raw_lines]
+        lines = [ln.lstrip("#").strip() for ln in raw_lines]
         pages = [None] * len(lines)
     if not lines:
         raise ResumeValidationError("No readable text was found. Scanned/image-only resumes are not supported yet.")
@@ -247,33 +260,57 @@ def _section(parsed: ParsedResume, *keywords: str) -> list[ResumeSection]:
     return [s for s in parsed.sections if any(k in s.name.lower() for k in keywords)]
 
 
+BULLET_CHARS = ("•", "·", "◦", "‣", "▪", "■", "●", "\uf0b7", "-", "*", "–")
+
+
+def _is_bullet(line: str) -> bool:
+    return line.lstrip().startswith(BULLET_CHARS)
+
+
 def _extract_experience(parsed: ParsedResume) -> list[ExperienceEntry]:
+    """Find roles anchored on their date-range lines.
+
+    Supported layouts (header lines directly above the dates line):
+      "EMPLOYER | Title"            or      "EMPLOYER"
+      "Month YYYY - Present | City"         "Title"
+                                            "Month YYYY - Present | City"
+    """
     entries: list[ExperienceEntry] = []
-    for section in _section(parsed, "experience", "employment"):
-        lines = [ln for ln in section.text.split("\n")[1:] if ln.strip()]
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            nxt = lines[i + 1] if i + 1 < len(lines) else ""
-            if "|" in line and not _DATE_RANGE.search(line) and _DATE_RANGE.search(nxt):
-                employer, _, title = (p.strip() for p in line.partition("|"))
-                date_part, _, loc = (p.strip() for p in nxt.partition("|"))
-                entry = ExperienceEntry(employer=employer.title() if employer.isupper() and len(employer) > 4 else employer,
-                                        title=title,
-                                        dates=date_part, location=loc)
-                i += 2
-                while i < len(lines):
-                    probe_next = lines[i + 1] if i + 1 < len(lines) else ""
-                    if "|" in lines[i] and _DATE_RANGE.search(probe_next):
-                        break
-                    entry.highlights.append(lines[i].strip())
-                    i += 1
-                entries.append(entry)
-                continue
-            m = _DATE_RANGE.search(line)
-            if m and not entries:
-                entries.append(ExperienceEntry(title=line[: m.start()].strip(" |-,"), dates=m.group(0)))
-            i += 1
+    for section in _section(parsed, "experience", "employment", "work history", "career history"):
+        lines = [ln.strip() for ln in section.text.split("\n")[1:] if ln.strip()]
+        anchors = [i for i, ln in enumerate(lines)
+                   if not _is_bullet(ln) and len(ln) < 90 and (m := _DATE_RANGE.search(ln)) and m.start() < 3]
+        blocks = []  # (header_start, date_idx, employer, title)
+        for k, d in enumerate(anchors):
+            floor = anchors[k - 1] + 1 if k else 0
+            header = []
+            j = d - 1
+            while j >= floor and len(header) < 2 and not _is_bullet(lines[j]) and not _DATE_RANGE.search(lines[j]):
+                header.insert(0, j)
+                j -= 1
+            if header and "|" in lines[header[-1]]:
+                employer, _, title = (p.strip() for p in lines[header[-1]].partition("|"))
+                header = [header[-1]]
+            elif len(header) == 2:
+                employer, title = lines[header[0]], lines[header[1]]
+            elif header:
+                employer, title = "", lines[header[0]]
+            else:
+                employer, title = "", ""
+            blocks.append((header[0] if header else d, d, employer, title))
+        for k, (start, d, employer, title) in enumerate(blocks):
+            end = blocks[k + 1][0] if k + 1 < len(blocks) else len(lines)
+            date_part, _, loc = (p.strip() for p in lines[d].partition("|"))
+            highlights: list[str] = []
+            for ln in lines[d + 1:end]:
+                if _is_bullet(ln) or not highlights:
+                    highlights.append(ln.lstrip("".join(BULLET_CHARS) + " ").strip())
+                else:  # wrapped continuation line (common in PDFs)
+                    highlights[-1] = f"{highlights[-1]} {ln}"
+            if employer.isupper() and len(employer) > 4:
+                employer = employer.title()
+            entries.append(ExperienceEntry(employer=employer, title=title, dates=date_part, location=loc,
+                                           highlights=highlights))
     return entries
 
 
@@ -298,10 +335,23 @@ def extract_profile(parsed: ParsedResume) -> CandidateProfile:
     headline = lines[1].strip() if len(lines) > 1 and "@" not in lines[1] else None
 
     header = parsed.sections[0].text if parsed.sections else text[:500]
-    location = next((loc for loc in _KNOWN_LOCATIONS if re.search(rf"\b{loc}\b", header)), None)
-    if location:
-        m = re.search(rf"\b{location}\b[^|\n]*", header)
-        location = m.group(0).strip() if m else location
+    header_lines = [ln.strip() for ln in header.split("\n") if ln.strip()]
+    location = None
+    for i, ln in enumerate(header_lines[:-1]):  # "Location" label with the value on the next line
+        if re.fullmatch(r"(current\s+)?(location|address|based in)\s*:?", ln, re.IGNORECASE):
+            location = header_lines[i + 1]
+            break
+    if not location:
+        m = re.search(r"(?:location|based in)\s*:\s*([^|\n]+)", header, re.IGNORECASE)
+        location = m.group(1).strip() if m else None
+    if not location:
+        found = next((loc for loc in _KNOWN_LOCATIONS if re.search(rf"\b{loc}\b", header)), None)
+        if found:
+            m = re.search(rf"\b{found}\b[^|\n]*", header)
+            location = m.group(0).strip() if m else found
+    if not location:
+        m = re.search(r"\b([A-Z][\w.'-]+(?: [A-Z][\w.'-]+)*, (?:[A-Z][\w.'-]+ ?)+, India)\b", header)
+        location = m.group(1) if m else None
 
     years = _YEARS_EXP.search(text)
     skills, evidence = extract_skills(text)

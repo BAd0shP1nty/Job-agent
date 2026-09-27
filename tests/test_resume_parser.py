@@ -95,3 +95,26 @@ def test_macro_enabled_docx_is_rejected():
 def test_oversized_upload_is_rejected():
     with pytest.raises(ResumeValidationError, match="larger than"):
         parse_resume("resume.txt", b"a" * (5 * 1024 * 1024 + 1))
+
+
+def test_pdf_with_running_header_label_location_and_multiline_roles():
+    fitz = pytest.importorskip("pymupdf")
+    doc = fitz.open()
+    pages = [
+        ["Casey Example | Professional Profile", "Page 1", "Casey Example", "Service Operations | ITIL",
+         "Location", "Tumkur, Karnataka, India", "Professional Summary", "ITIL and ServiceNow practitioner."],
+        ["Casey Example | Professional Profile", "Page 2", "Professional Experience", "EXAMPLE TELECOM PRIVATE LIMITED",
+         "Service Delivery Manager", "January 2019 - Present | Bengaluru", "• Own incident management and",
+         "change governance.", "HP", "Team Mentor", "December 2003 - August 2004 | Bangalore", "Education",
+         "BE Electronics"],
+    ]
+    for lines in pages:
+        page = doc.new_page()
+        page.insert_text((72, 72), "\n".join(lines), fontsize=9)
+    profile = extract_profile(parse_resume("cv.pdf", doc.tobytes()))
+    assert profile.name == "Casey Example"                       # running header removed
+    assert profile.current_location == "Tumkur, Karnataka, India"  # "Location" label + next line
+    roles = [(e.employer, e.title, e.dates) for e in profile.experience]
+    assert roles == [("Example Telecom Private Limited", "Service Delivery Manager", "January 2019 - Present"),
+                     ("HP", "Team Mentor", "December 2003 - August 2004")]  # all-caps employer is not a heading
+    assert profile.experience[0].highlights == ["Own incident management and change governance."]

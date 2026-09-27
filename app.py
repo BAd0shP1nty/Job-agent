@@ -73,7 +73,7 @@ def main() -> None:
             label = f"{icon}  {name}" + (f"  ({badges[name]})" if name in badges else "")
             is_current = st.session_state["page"] == name
             if st.button(label, key=f"nav-{name}", type="primary" if is_current else "secondary",
-                         use_container_width=True, help=f"Open {name}"):
+                         width="stretch", help=f"Open {name}"):
                 st.session_state["page"] = name
                 st.rerun()
         st.divider()

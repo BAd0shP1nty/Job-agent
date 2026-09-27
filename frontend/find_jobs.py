@@ -52,7 +52,7 @@ def _render_manual(db) -> None:
         description = st.text_area("Full job description *", height=260,
                                    help="Copy the whole description, including any visa, relocation or remote-work "
                                         "terms. Only this text is used as evidence.")
-        submitted = st.form_submit_button("🧪 Check this job", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("🧪 Check this job", type="primary", width="stretch")
     if not submitted:
         return
     from agent.manual import ManualJobError, build_manual_listing, screen_manual_job
@@ -121,7 +121,7 @@ def _render_search(db) -> None:
             t1, t2 = st.columns(2)
             remote_only = t1.toggle("Remote-only", value=bool(s["remote_only"]))
             bangalore_only = t2.toggle("Bangalore-only (India roles)", value=bool(s["bangalore_only"]))
-        submitted = st.form_submit_button("🚀  Run Job Search", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("🚀  Run Job Search", type="primary", width="stretch")
 
     if not submitted:
         _render_last_result()

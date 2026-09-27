@@ -75,7 +75,7 @@ def render(db) -> None:
         on_change=_on_edit,
         args=(db, job_ids),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         disabled=["Job title", "Company", "Location", "Source", "Discovered", "Listing", "Matching skills",
                   "Match summary"],
         column_config={

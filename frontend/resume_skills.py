@@ -36,7 +36,7 @@ def _profile_form(profile: CandidateProfile, key: str, submit_label: str) -> Can
         exp_df = pd.DataFrame([{"Employer": e.employer, "Title": e.title, "Dates": e.dates, "Location": e.location,
                                 "Highlights": " • ".join(e.highlights)} for e in profile.experience]
                               or [{"Employer": "", "Title": "", "Dates": "", "Location": "", "Highlights": ""}])
-        exp_edit = st.data_editor(exp_df, num_rows="dynamic", use_container_width=True, key=f"exp-{key}")
+        exp_edit = st.data_editor(exp_df, num_rows="dynamic", width="stretch", key=f"exp-{key}")
         arrangements = st.multiselect("Preferred work arrangements", ["remote", "hybrid", "office"],
                                       default=profile.work_arrangements)
         submitted = st.form_submit_button(submit_label, type="primary")
@@ -143,7 +143,7 @@ def render(db) -> None:
         st.caption("These additional target skills are stored in list.py (valid JSON) and merged with your resume "
                    "skills without duplicates. Every discovered job must match at least one confirmed skill.")
         edited = st.data_editor(pd.DataFrame({"Skill": configured or [""]}), num_rows="dynamic",
-                                use_container_width=True, key="skills-editor")
+                                width="stretch", key="skills-editor")
         if st.button("💾 Save skills to list.py", type="primary"):
             new_skills = [str(s).strip() for s in edited["Skill"].tolist() if str(s or "").strip()]
             try:

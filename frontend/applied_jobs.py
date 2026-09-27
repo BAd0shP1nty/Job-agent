@@ -33,7 +33,7 @@ def render(db) -> None:
         "Days left": days_left(r["expires_at"]),
     } for r in rows])
     st.dataframe(
-        frame, hide_index=True, use_container_width=True,
+        frame, hide_index=True, width="stretch",
         column_config={
             "Listing": st.column_config.LinkColumn("Listing", display_text="Open listing ↗"),
             "Days left": st.column_config.ProgressColumn("Days left", min_value=0, max_value=APPLIED_VISIBILITY_DAYS,

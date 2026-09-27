@@ -63,7 +63,7 @@ def render(db) -> None:
                              "Sources": ", ".join(json.loads(r["sources_checked"] or "[]")),
                              "Discovered": r["jobs_discovered"], "Queued": r["jobs_eligible"],
                              "Rejected": r["jobs_rejected"], "Duplicates": r["jobs_duplicate"]})
-            st.dataframe(rows, use_container_width=True, hide_index=True)
+            st.dataframe(rows, width="stretch", hide_index=True)
     with right:
         st.subheader("Source health")
         if not sources:

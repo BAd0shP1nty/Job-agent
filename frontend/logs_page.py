@@ -37,9 +37,9 @@ def render(db) -> None:
         chosen = st.multiselect("Outcome", outcomes, default=outcomes)
         rows = [{"Outcome": e["outcome"], "Title": e["title"], "Company": e["company"], "Source": e["source_name"],
                  "Reason": e["reason"], "URL": e["url"]} for e in entries if e["outcome"] in chosen]
-        st.dataframe(rows, hide_index=True, use_container_width=True,
+        st.dataframe(rows, hide_index=True, width="stretch",
                      column_config={"URL": st.column_config.LinkColumn("URL", display_text="open ↗")})
     with tab2:
         logs = runs.agent_logs(run_id)
         st.dataframe([{"Time": fmt_time(l["created_at"]), "Node": l["node"], "Level": l["level"],
-                       "Message": l["message"]} for l in reversed(logs)], hide_index=True, use_container_width=True)
+                       "Message": l["message"]} for l in reversed(logs)], hide_index=True, width="stretch")
