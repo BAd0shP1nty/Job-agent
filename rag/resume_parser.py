@@ -106,7 +106,10 @@ def _is_heading(line: str, style: str | None = None) -> bool:
 
 
 def _extract_docx(data: bytes) -> tuple[list[str], list[str | None]]:
-    import docx  # python-docx
+    try:
+        import docx  # python-docx
+    except ImportError:
+        return _extract_docx_stdlib(data)
 
     document = docx.Document(io.BytesIO(data))
     lines: list[str] = []
@@ -131,17 +134,67 @@ def _extract_docx(data: bytes) -> tuple[list[str], list[str | None]]:
     return lines, styles
 
 
-def _extract_pdf(data: bytes) -> tuple[list[str], list[int]]:
-    import pymupdf as fitz  # PyMuPDF
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
+
+def _extract_docx_stdlib(data: bytes) -> tuple[list[str], list[str | None]]:
+    """Fallback DOCX reader using only the standard library (paragraphs, styles, bullets)."""
+    import xml.etree.ElementTree as ET
+
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        root = ET.fromstring(zf.read("word/document.xml"))
+    lines: list[str] = []
+    styles: list[str | None] = []
+    for para in root.iter(f"{_W}p"):
+        text = "".join(t.text or "" for t in para.iter(f"{_W}t")).strip()
+        if not text:
+            continue
+        ppr = para.find(f"{_W}pPr")
+        style_el = ppr.find(f"{_W}pStyle") if ppr is not None else None
+        raw = style_el.get(f"{_W}val") if style_el is not None else None
+        style = re.sub(r"(?<=[a-z])(?=[A-Z0-9])", " ", raw) if raw else None  # "Heading1" -> "Heading 1"
+        is_list = (style or "").lower().startswith("list") or (ppr is not None and ppr.find(f"{_W}numPr") is not None)
+        lines.append(("• " if is_list else "") + text)
+        styles.append(style)
+    return lines, styles
+
+
+class ResumeLibraryError(ResumeValidationError):
+    """A document-reading library could not be loaded on this computer."""
+
+
+def _pdf_page_texts(data: bytes) -> list[str]:
+    """Text of each PDF page. PyMuPDF first; pure-Python pypdf if PyMuPDF can't load
+    (e.g. a missing Visual C++ runtime on Windows)."""
+    errors = []
+    try:
+        try:
+            import pymupdf as fitz
+        except ImportError:
+            import fitz  # older PyMuPDF releases
+        with fitz.open(stream=data, filetype="pdf") as doc:
+            return [page.get_text("text") for page in doc]
+    except ImportError as exc:
+        errors.append(f"PyMuPDF: {exc}")
+    try:
+        from pypdf import PdfReader
+
+        return [page.extract_text() or "" for page in PdfReader(io.BytesIO(data)).pages]
+    except ImportError as exc:
+        errors.append(f"pypdf: {exc}")
+    raise ResumeLibraryError(
+        "This computer could not load a PDF reader (" + "; ".join(errors) + "). Run `pip install pypdf` in the "
+        "app's virtual environment, or upload the resume as DOCX or TXT.")
+
+
+def _extract_pdf(data: bytes) -> tuple[list[str], list[int]]:
     lines: list[str] = []
     pages: list[int] = []
-    with fitz.open(stream=data, filetype="pdf") as doc:
-        for page_number, page in enumerate(doc, start=1):
-            for line in page.get_text("text").splitlines():
-                if line.strip():
-                    lines.append(line.strip())
-                    pages.append(page_number)
+    for page_number, page_text in enumerate(_pdf_page_texts(data), start=1):
+        for line in page_text.splitlines():
+            if line.strip():
+                lines.append(line.strip())
+                pages.append(page_number)
     # Remove running headers/footers: page numbers and lines repeated on several pages.
     page_count = len(set(pages))
     seen_on: dict[str, set[int]] = {}
@@ -260,7 +313,7 @@ def _section(parsed: ParsedResume, *keywords: str) -> list[ResumeSection]:
     return [s for s in parsed.sections if any(k in s.name.lower() for k in keywords)]
 
 
-BULLET_CHARS = ("•", "·", "◦", "‣", "▪", "■", "●", "\uf0b7", "-", "*", "–")
+BULLET_CHARS = ("•", "·", "◦", "‣", "▪", "■", "●", "\uf0b7", "\x7f", "-", "*", "–")
 
 
 def _is_bullet(line: str) -> bool:

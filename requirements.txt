@@ -4,6 +4,7 @@ anthropic>=1.0
 pydantic>=2.6
 python-docx>=1.1
 pymupdf>=1.24
+pypdf>=4.0   # fallback PDF reader when PyMuPDF cannot load (e.g. Windows without VC++ runtime)
 requests>=2.31
 beautifulsoup4>=4.12
 python-dotenv>=1.0

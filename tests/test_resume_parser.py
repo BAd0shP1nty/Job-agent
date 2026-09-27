@@ -118,3 +118,25 @@ def test_pdf_with_running_header_label_location_and_multiline_roles():
     assert roles == [("Example Telecom Private Limited", "Service Delivery Manager", "January 2019 - Present"),
                      ("HP", "Team Mentor", "December 2003 - August 2004")]  # all-caps employer is not a heading
     assert profile.experience[0].highlights == ["Own incident management and change governance."]
+
+
+def test_docx_falls_back_to_stdlib_reader_when_python_docx_cannot_load(sample_resume_bytes, monkeypatch):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "docx", None)  # simulates an ImportError (e.g. a DLL failing on Windows)
+    profile = extract_profile(parse_resume("resume.docx", sample_resume_bytes))
+    assert profile.name == "Jordan Sample"
+    assert profile.experience[0].title == "Service Delivery Manager"
+    assert len(profile.experience[0].highlights) == 2
+    assert "ITIL" in profile.skills
+
+
+def test_clear_error_when_no_pdf_reader_can_load(monkeypatch):
+    import sys
+
+    from rag.resume_parser import ResumeLibraryError
+
+    for mod in ("pymupdf", "fitz", "pypdf"):
+        monkeypatch.setitem(sys.modules, mod, None)
+    with pytest.raises(ResumeLibraryError, match="pip install pypdf"):
+        parse_resume("cv.pdf", b"%PDF-1.4 minimal")

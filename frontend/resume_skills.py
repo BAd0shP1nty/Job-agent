@@ -78,7 +78,8 @@ def render(db) -> None:
             except ResumeValidationError as exc:
                 st.error(str(exc), icon="🚫")
             except Exception as exc:  # noqa: BLE001
-                st.error(f"Could not read this file ({exc.__class__.__name__}). Try exporting it as PDF or DOCX.")
+                st.error(f"Could not read this file ({exc.__class__.__name__}: {exc}). Try exporting it as PDF or "
+                         "DOCX, and send this message to whoever supports the app if it persists.")
 
         draft = st.session_state.get("resume-draft")
         if draft:
