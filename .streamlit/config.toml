@@ -9,8 +9,9 @@ font = "sans serif"
 maxUploadSize = 5
 # Only reachable from this computer (the app holds your resume). Remove to share on your network.
 address = "127.0.0.1"
-# Open the browser automatically when the app starts.
-headless = false
+# Headless avoids Streamlit's first-run e-mail prompt, which blocks start-up until answered.
+# Open http://127.0.0.1:8501 in your browser after starting the app.
+headless = true
 
 [browser]
 gatherUsageStats = false
