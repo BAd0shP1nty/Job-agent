@@ -5,8 +5,14 @@ from dataclasses import dataclass
 
 from database.connection import Database
 from database.models import RawListing
-from database.repository import HttpCacheRepository, SourceRegistryRepository
-from discovery.api_connectors import AdzunaConnector, ArbeitnowConnector, HimalayasConnector, RemotiveConnector
+from database.repository import HttpCacheRepository, SourceRegistryRepository, UsageTracker
+from discovery.api_connectors import (
+    AdzunaConnector,
+    ArbeitnowConnector,
+    HimalayasConnector,
+    JoobleConnector,
+    RemotiveConnector,
+)
 from discovery.base import HttpClient, SearchQuery, SourceAdapter, SourceError
 from discovery.employer_sites import AshbyConnector, CareerPageConnector, GreenhouseConnector, LeverConnector
 from discovery.public_job_boards import IndeedConnector, LinkedInConnector, NaukriConnector, TestFixtureConnector
@@ -16,6 +22,7 @@ CONNECTOR_CLASSES: list[type[SourceAdapter]] = [
     ArbeitnowConnector,
     HimalayasConnector,
     AdzunaConnector,
+    JoobleConnector,
     GreenhouseConnector,
     LeverConnector,
     AshbyConnector,
@@ -53,7 +60,7 @@ class SourceRegistry:
 
     def adapter(self, name: str) -> SourceAdapter:
         entry = self.repo.get(name) or {"config": {}}
-        return self.classes[name](self.http, entry.get("config") or {})
+        return self.classes[name](self.http, entry.get("config") or {}, usage=UsageTracker(self.db, name))
 
     def entries(self) -> list[dict]:
         rows = {r["source_name"]: r for r in self.repo.list()}

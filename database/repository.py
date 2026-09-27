@@ -95,6 +95,7 @@ DEFAULT_SEARCH_SETTINGS: dict[str, Any] = {
     "date_posted_days": 30,
     "min_relevance_score": 0,
     "max_results_per_search": 50,
+    "min_skill_matches": 1,
     "use_llm": True,
     "allow_resume_to_llm": None,  # None -> fall back to ALLOW_RESUME_TO_LLM env var
     "relevance_weights": {"skill_coverage": 0.5, "title_alignment": 0.2, "evidence_completeness": 0.2, "recency": 0.1},
@@ -489,3 +490,22 @@ class HttpCacheRepository:
 def applied_expiry(ingested_at: str) -> str:
     base = parse_iso(ingested_at) or utcnow()
     return (base + timedelta(days=APPLIED_VISIBILITY_DAYS)).isoformat(timespec="seconds")
+
+
+class UsageTracker:
+    """Counts billable/quota-limited API requests per source and bucket (e.g. Jooble key per country)."""
+
+    def __init__(self, db: Database, source_name: str):
+        self.settings = SettingsRepository(db)
+        self.source_name = source_name
+
+    def _key(self, bucket: str) -> str:
+        return f"usage:{self.source_name}:{bucket}"
+
+    def used(self, bucket: str) -> int:
+        return int(self.settings.get(self._key(bucket), 0) or 0)
+
+    def record(self, bucket: str, count: int = 1) -> int:
+        total = self.used(bucket) + count
+        self.settings.set(self._key(bucket), total)
+        return total

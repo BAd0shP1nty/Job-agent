@@ -69,7 +69,7 @@ STATUS_COLORS = {
     "failing": "#EF4444", "error": "#EF4444", "high": "#10B981", "medium": "#F59E0B", "low": "#EF4444",
     "remote": "#06B6D4", "hybrid": "#8B5CF6", "office": "#0EA5E9", "unknown": "#64748B", "test": "#DB2777",
     "completed": "#10B981", "completed_with_errors": "#F59E0B", "failed": "#EF4444", "interrupted": "#F59E0B",
-    "running": "#6366F1", "flagged": "#F59E0B", "below_threshold": "#64748B",
+    "running": "#6366F1", "quota_exhausted": "#F59E0B", "flagged": "#F59E0B", "below_threshold": "#64748B",
 }
 
 

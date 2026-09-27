@@ -124,3 +124,20 @@ def test_untrusted_text_is_escaped(ui_db):
     text = markdown_text(at)
     assert "<script>alert(1)</script>" not in text
     assert "&lt;script&gt;" in text
+
+
+def test_add_a_job_you_found_from_gui(ui_db):
+    at = goto(app(), "Find Jobs")
+    field = {w.label: w for w in list(at.text_input) + list(at.text_area)}
+    field["Job link *"].set_value("https://www.naukri.com/job-listings-service-delivery-manager-123")
+    field["Job title *"].set_value("Service Delivery Manager")
+    field["Company *"].set_value("Example Services")
+    field["Location (as stated in the listing)"].set_value("Pune, India")
+    field["Full job description *"].set_value(
+        "Own ITIL service delivery, incident management and vendor governance for enterprise clients. "
+        "Office based in Pune with occasional travel to client sites across India.")
+    next(b for b in at.button if "Check this job" in b.label).click().run()
+    assert not at.exception, at.exception
+    assert any("added to Pending Approval" in s.value for s in at.success)
+    job = JobRepository(ui_db).list_by_status("pending")[0]
+    assert job["source_name"] == "manual:naukri.com"

@@ -73,8 +73,9 @@ def match_skills(skills: list[str], text: str, url: str | None = None) -> list[S
     return matches
 
 
-def passes_skill_filter(matches: list[SkillMatch]) -> bool:
-    return len(matches) >= 1
+def passes_skill_filter(matches: list[SkillMatch], minimum: int = 1) -> bool:
+    """Mandatory rule: at least ``minimum`` (never less than 1) distinct confirmed skills must appear."""
+    return len({m.skill.casefold() for m in matches}) >= max(1, int(minimum or 1))
 
 
 # Vocabulary used to spot requirements in a listing that the candidate has *not*

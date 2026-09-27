@@ -128,6 +128,11 @@ class AgentNodes:
         )
         enabled = [n for n in (s.get("enabled_sources_override") or self.deps.registry.enabled_names())
                    if n in self.deps.registry.classes]
+        if s.get("manual_listings"):
+            # A job the user found themselves: skip source searches, run every other check.
+            enabled = []
+            return {"search_query": query.__dict__, "enabled_sources": enabled,
+                    "_log": [f"Manual entry: screening {len(s['manual_listings'])} job(s) added by the user."]}
         return {"search_query": query.__dict__, "enabled_sources": enabled,
                 "_log": [f"Plan: {len(query.keywords)} titles, {len(query.skills)} skills, sources: "
                          f"{', '.join(enabled) or 'none enabled'}."]}
@@ -138,6 +143,10 @@ class AgentNodes:
         query = SearchQuery(**state["search_query"])
         listings: list[dict] = []
         results, lines, errors = [], [], []
+        manual = state["search_settings"].get("manual_listings") or []
+        if manual:
+            listings.extend(manual)
+            results.append({"source": "manual", "count": len(manual), "status": "working", "error": None})
         for name in state.get("enabled_sources", []):
             self.deps.progress("discover_jobs", f"Searching {name}…")
             res = self.deps.registry.run_source(name, query)
@@ -190,9 +199,12 @@ class AgentNodes:
             listing = RawListing.model_validate(item["listing"])
             haystack = f"{listing.title}\n{listing.description}"
             matches = match_skills(skills, haystack, listing.source_url)
-            if not passes_skill_filter(matches):
-                rejected.append({"listing": _brief(item["listing"]), "outcome": "rejected",
-                                 "reason": "no confirmed skill from the resume or list.py appears in the listing"})
+            minimum = max(1, int(s.get("min_skill_matches") or 1))
+            if not passes_skill_filter(matches, minimum):
+                reason = ("no confirmed skill from the resume or list.py appears in the listing" if not matches else
+                          f"only {len(matches)} confirmed skill(s) matched ({', '.join(m.skill for m in matches)}); "
+                          f"minimum is {minimum}")
+                rejected.append({"listing": _brief(item["listing"]), "outcome": "rejected", "reason": reason})
                 continue
             decision = screen_location(
                 title=listing.title, location=listing.location, country_hint=listing.country,

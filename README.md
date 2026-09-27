@@ -40,6 +40,12 @@ streamlit run app.py               # opens http://localhost:8501
 5. **Selected Jobs** → set **Status** to *Applied* after you have applied yourself.
 6. **Applied Jobs** → records stay visible for 15 days from when the job was first discovered.
 
+**Add a job you found yourself (LinkedIn, Naukri, anywhere)**
+
+*Find Jobs → ➕ Add a job you found*: paste the link, title, company, location and the full description.
+The page is not fetched (those portals don't permit it). The job goes through exactly the same skill,
+location and visa rules, resume evidence, deduplication and approval lifecycle as discovered jobs.
+
 **Try the whole lifecycle on mock data (no network needed)**
 
 ```bash
@@ -54,7 +60,7 @@ employer, and links to a reserved `example.*` domain.
 **Run the tests**
 
 ```bash
-python -m pytest            # 151 tests, about 10 s, fully offline
+python -m pytest            # 165 tests, about 10 s, fully offline
 ```
 
 ---
@@ -105,7 +111,7 @@ its output can't change them.
 
 | Rule | Behaviour |
 |---|---|
-| **Mandatory skill match** | At least one *confirmed* skill must appear in the listing: resume skills you reviewed plus `list.py` skills. A match is a literal occurrence or a documented exact synonym (`screening/skill_filter.py → SKILL_ALIASES`), and each one is stored with the sentence that proves it. Loose associations such as "cloud" for "AWS" don't count. Short acronyms are case-sensitive, so "AI" doesn't match "Mumbai". |
+| **Mandatory skill match** | At least one (configurable: *Search Settings → Minimum matching skills per job*, 1–5) *confirmed* skill must appear in the listing: resume skills you reviewed plus `list.py` skills. A match is a literal occurrence or a documented exact synonym (`screening/skill_filter.py → SKILL_ALIASES`), and each one is stored with the sentence that proves it. Loose associations such as "cloud" for "AWS" don't count. Short acronyms are case-sensitive, so "AI" doesn't match "Mumbai". |
 | **India** | Office, hybrid and remote roles are accepted in every Indian city. The optional **Bangalore-only** setting keeps only Bangalore roles and remote India roles. |
 | **Outside India** | Accepted only with an explicit quote showing at least one of: **remote work open to someone in India** (India/APAC named, or "work from anywhere / worldwide", or a structured candidate-location field), **relocation assistance**, or **visa sponsorship**. "Remote" alone is not enough, and neither is "hybrid". |
 | **Ambiguity** | Hedged wording ("may", "case-by-case"), contradictory statements and unknown locations become `requires_verification`. They are logged as *unverified* and kept out of the queue, never upgraded. |
@@ -194,6 +200,7 @@ state of each one:
 | Remotive | Official public API | ✅ implemented, tested against the documented response shape | None. Terms ask for a link back and low request volume (cached 6 h). |
 | Arbeitnow | Official public API (DE/EU) | ✅ implemented, tested against the documented shape | None |
 | Himalayas | Official public API (remote) | ✅ implemented, tested against the documented shape | None |
+| Jooble | Official API (key per country) | ✅ implemented, tested against the documented shape | Free key per country (`JOOBLE_API_KEY_IN` for India from in.jooble.org/api/about). **Free plan = 500 requests per key in total**: the app caches for 12 h, spends at most `requests_per_run` (default 3) per search, never retries, and stops 10 short of the limit. Snippets only. |
 | Adzuna | Official API (IN, UK, EU) | ✅ implemented, tested against the documented shape | Free `ADZUNA_APP_ID` / `ADZUNA_APP_KEY`. Descriptions are snippets, so overseas jobs often stay unverified. |
 | Greenhouse Job Board API | Employer career sites | ✅ implemented, tested against the documented shape | Board tokens of employers you choose |
 | Lever Postings API | Employer career sites | ✅ implemented, tested against the documented shape | Company slugs (`region=eu` for EU boards) |

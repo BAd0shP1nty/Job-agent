@@ -32,11 +32,11 @@ It never invents jobs, never scrapes sites that forbid it, and never submits app
 | **Database** | **SQLite** with versioned migrations and a repository layer | Local and simple. Status changes are atomic transactions, and the design is ready for PostgreSQL later. |
 | **Resume parsing** | **PyMuPDF** (PDF), **python-docx** (DOCX) | Local, no cloud upload |
 | **Data validation** | **Pydantic v2** | Strict schemas for listings, profiles and LLM output |
-| **Job sources (APIs)** | **Remotive, Arbeitnow, Himalayas** (public APIs), **Adzuna** (free key), **Greenhouse / Lever / Ashby** (employer career-site APIs) | Official, permitted access only |
+| **Job sources (APIs)** | **Remotive, Arbeitnow, Himalayas** (public APIs), **Adzuna** and **Jooble** (free keys, good for India), **"Add a job you found"** (paste from LinkedIn/Naukri), **Greenhouse / Lever / Ashby** (employer career-site APIs) | Official, permitted access only |
 | **Web scraping** | **No scraping of job portals.** Only reads schema.org `JobPosting` data on career pages you list, if the site's `robots.txt` allows it. Uses **requests** + **BeautifulSoup**. | LinkedIn, Naukri and Indeed are listed but disabled: they need partner agreements and forbid scraping. |
 | **HTTP reliability** | Custom client: rate limiting, retries with exponential backoff, caching, `robots.txt` checks | One failing source never stops the others |
 | **MCP server** | **None used by the app.** | MCP can be added later as an optional connector. |
-| **Testing** | **pytest** (151 tests) + **Streamlit AppTest** (GUI tests) + mock job fixtures | Covers rules, deduplication, lifecycle, agent graph, connectors and UI |
+| **Testing** | **pytest** (165 tests) + **Streamlit AppTest** (GUI tests) + mock job fixtures | Covers rules, deduplication, lifecycle, agent graph, connectors and UI |
 | **Config & secrets** | `.env` file via **python-dotenv**; skills in `list.py` (JSON) | No keys in code; resumes and databases are git-ignored |
 | **Version control** | **Git / GitHub** — branch `claude/autopilot-job-hunt-agent-lkm0r9` | |
 

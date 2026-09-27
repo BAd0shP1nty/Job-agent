@@ -51,6 +51,12 @@ class SourceFailure(SourceError):
     status = "failing"
 
 
+class SourceQuotaExhausted(SourceError):
+    """A free API quota is (nearly) used up; the connector stops before exceeding it."""
+
+    status = "quota_exhausted"
+
+
 @dataclass
 class SearchQuery:
     keywords: list[str]
@@ -77,9 +83,10 @@ class ConnectorInfo:
 class SourceAdapter(ABC):
     info: ConnectorInfo
 
-    def __init__(self, http: "HttpClient", config: dict[str, Any] | None = None):
+    def __init__(self, http: "HttpClient", config: dict[str, Any] | None = None, usage=None):
         self.http = http
         self.config = config or {}
+        self.usage = usage  # optional UsageTracker for APIs with request quotas
 
     @property
     def name(self) -> str:
@@ -170,31 +177,42 @@ class HttpClient:
         return parser.can_fetch(self.session.headers["User-Agent"], url)
 
     # requests --------------------------------------------------------------------
-    def _request(self, url: str, params: dict | None) -> requests.Response:
+    def _request(self, url: str, params: dict | None, *, method: str = "GET", json_body: Any = None,
+                 max_retries: int | None = None, safe_path: str | None = None) -> requests.Response:
+        """Send a request with bounded retries.
+
+        ``safe_path`` replaces the URL path in error messages - used when the path
+        contains a secret such as an API key.
+        """
         host = urlsplit(url).netloc
+        path = safe_path if safe_path is not None else urlsplit(url).path
+        retries = self.max_retries if max_retries is None else max_retries
         attempt = 0
         while True:
             self._throttle(host)
             try:
-                resp = self.session.get(url, params=params, timeout=self.timeout)
+                if method == "POST":
+                    resp = self.session.post(url, json=json_body, timeout=self.timeout)
+                else:
+                    resp = self.session.get(url, params=params, timeout=self.timeout)
             except requests.exceptions.ProxyError as exc:
                 raise SourceAccessDenied(f"Network policy/proxy refused the connection to {host}.") from exc
             except (requests.ConnectionError, requests.Timeout) as exc:
-                if attempt >= self.max_retries:
+                if attempt >= retries:
                     raise SourceFailure(f"Network error contacting {host}: {exc.__class__.__name__}") from exc
                 self.sleep(self.backoff_base * (2 ** attempt))
                 attempt += 1
                 continue
             if resp.status_code in (401, 403):
                 raise SourceAccessDenied(f"{host} denied access (HTTP {resp.status_code}).")
-            if resp.status_code in self.RETRY_STATUSES and attempt < self.max_retries:
+            if resp.status_code in self.RETRY_STATUSES and attempt < retries:
                 retry_after = resp.headers.get("Retry-After")
                 delay = float(retry_after) if retry_after and retry_after.isdigit() else self.backoff_base * (2 ** attempt)
                 self.sleep(min(delay, 60))
                 attempt += 1
                 continue
             if resp.status_code == 404:
-                raise SourceFailure(f"{host} returned 404 for {urlsplit(url).path} (check the board/company id).")
+                raise SourceFailure(f"{host} returned 404 for {path} (check the board/company id).")
             if resp.status_code >= 400:
                 raise SourceFailure(f"{host} returned HTTP {resp.status_code}.")
             return resp
@@ -216,6 +234,24 @@ class HttpClient:
         if self.cache is not None and cache_ttl > 0:
             self.cache.put(key, json.dumps(data))
         return data
+
+    def post_json(self, url: str, payload: dict, cache_ttl: int = 3600, max_retries: int | None = None,
+                  safe_path: str | None = None) -> tuple[Any, bool]:
+        """POST a JSON body. Returns (data, served_from_cache)."""
+        key = self._cache_key(url, {"__post__": json.dumps(payload, sort_keys=True)})
+        if self.cache is not None and cache_ttl > 0:
+            cached = self.cache.get(key, cache_ttl)
+            if cached is not None:
+                return json.loads(cached), True
+        resp = self._request(url, None, method="POST", json_body=payload, max_retries=max_retries,
+                             safe_path=safe_path)
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise SourceFailure(f"{urlsplit(url).netloc} returned malformed JSON.") from exc
+        if self.cache is not None and cache_ttl > 0:
+            self.cache.put(key, json.dumps(data))
+        return data, False
 
     def get_page(self, url: str, cache_ttl: int = 3600) -> str:
         if not self.allowed_by_robots(url):

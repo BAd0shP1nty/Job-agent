@@ -67,3 +67,12 @@ def test_missing_requirements():
 
 def test_merge_skills_preserves_first_casing():
     assert merge_skills(["ServiceNow", "ITIL"], ["itil", "SRE"]) == ["ServiceNow", "ITIL", "SRE"]
+
+
+def test_minimum_skill_matches_setting():
+    text = "Agile team building AI tools with ITIL processes."
+    matches = match_skills(["AI", "ITIL", "Kubernetes"], text)
+    assert passes_skill_filter(matches, 2)
+    assert not passes_skill_filter(matches, 3)
+    assert passes_skill_filter(matches, 0)  # never below the mandatory minimum of 1
+    assert not passes_skill_filter([], 0)

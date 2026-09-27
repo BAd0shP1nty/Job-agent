@@ -278,3 +278,14 @@ def test_raw_listing_marks_fixture():
     assert all(isinstance(l, RawListing) and l.is_test_fixture for l in listings)
     assert all("example." in l.source_url for l in listings)
     assert all(l.company.startswith("[TEST FIXTURE]") for l in listings)
+
+
+def test_min_skill_matches_rejects_weak_matches(db, sample_resume_bytes):
+    from database.repository import SettingsRepository
+
+    add_resume(db, sample_resume_bytes)
+    SettingsRepository(db).save_search_settings({"min_skill_matches": 4})
+    final = run_search(make_deps(db))
+    for job in JobRepository(db).list_by_status("pending") + JobRepository(db).list_by_status("duplicate_review"):
+        assert len(job["matched_skills"]) >= 4
+    assert any("minimum is 4" in r["reason"] for r in final["rejected"])

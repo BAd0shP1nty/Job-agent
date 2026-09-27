@@ -23,6 +23,11 @@ def render(db) -> None:
         bangalore_only = c1.toggle("Bangalore-only for India roles", value=bool(s["bangalore_only"]),
                                    help="When off, India roles outside Bangalore are kept.")
         remote_only = c2.toggle("Remote-only", value=bool(s["remote_only"]))
+        min_skills = st.slider(
+            "Minimum matching skills per job", 1, 5, int(s.get("min_skill_matches") or 1),
+            help="Skills come only from your confirmed resume profile and list.py. A job must mention at least this "
+                 "many of them (distinct). Raise it to filter out jobs that match only one generic skill such as "
+                 "'AI' or 'Agile'.")
         st.caption("Overseas roles always require explicit remote-from-India, relocation or visa-sponsorship "
                    "evidence. These rules are enforced in code and cannot be overridden by the model.")
 
@@ -49,7 +54,7 @@ def render(db) -> None:
                                       "passages retrieved as evidence are also sent. The full resume is never sent.")
         saved = st.form_submit_button("💾 Save settings", type="primary")
     if saved:
-        repo.save_search_settings({"bangalore_only": bangalore_only, "remote_only": remote_only,
+        repo.save_search_settings({"bangalore_only": bangalore_only, "remote_only": remote_only, "min_skill_matches": int(min_skills),
                                    "relevance_weights": weights, "use_llm": use_llm,
                                    "allow_resume_to_llm": allow_resume})
         st.toast("Settings saved.", icon="✅")

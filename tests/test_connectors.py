@@ -37,6 +37,9 @@ class FakeSession:
         self.headers = {}
         self.calls = []
 
+    def post(self, url, json=None, timeout=None):
+        return self.get(url, params=json, timeout=timeout)
+
     def get(self, url, params=None, timeout=None):
         self.calls.append((url, params))
         for key, resp in self.routes:

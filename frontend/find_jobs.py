@@ -27,7 +27,66 @@ NODE_LABELS = {
 
 
 def render(db) -> None:
-    hero("Find Jobs", "Run the agent across your enabled sources. Only verified, skill-matched roles reach your queue.")
+    hero("Find Jobs", "Run the agent across your enabled sources, or add a job you found yourself. Only verified, "
+                      "skill-matched roles reach your queue.")
+    tab_search, tab_manual = st.tabs(["🔎 Search sources", "➕ Add a job you found"])
+    with tab_search:
+        _render_search(db)
+    with tab_manual:
+        _render_manual(db)
+
+
+def _render_manual(db) -> None:
+    st.caption("Found a job on LinkedIn, Naukri, a company site or anywhere else? Paste it here. The page itself is "
+               "not fetched (those portals don't permit it); the job is checked against the same skill, location and "
+               "visa rules, matched to your resume with evidence, and de-duplicated like any other job.")
+    with st.form("manual-job-form", clear_on_submit=False):
+        url = st.text_input("Job link *", placeholder="https://www.linkedin.com/jobs/view/…")
+        c1, c2 = st.columns(2)
+        title = c1.text_input("Job title *")
+        company = c2.text_input("Company *")
+        c3, c4, c5 = st.columns(3)
+        location = c3.text_input("Location (as stated in the listing)", placeholder="e.g. Bengaluru, Karnataka, India")
+        arrangement = c4.selectbox("Work arrangement (as stated)", ["not stated", "remote", "hybrid", "onsite"])
+        posted = c5.date_input("Posting date (if shown)", value=None, format="DD/MM/YYYY")
+        description = st.text_area("Full job description *", height=260,
+                                   help="Copy the whole description, including any visa, relocation or remote-work "
+                                        "terms. Only this text is used as evidence.")
+        submitted = st.form_submit_button("🧪 Check this job", type="primary", use_container_width=True)
+    if not submitted:
+        return
+    from agent.manual import ManualJobError, build_manual_listing, screen_manual_job
+
+    try:
+        listing = build_manual_listing(url=url, title=title, company=company, location=location,
+                                       description=description, work_arrangement=arrangement, posting_date=posted)
+    except ManualJobError as exc:
+        st.error(str(exc), icon="✏️")
+        return
+    with st.spinner("Screening and matching…"):
+        try:
+            result = screen_manual_job(make_deps(db), listing)
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Could not check the job: {exc}")
+            return
+    messages = {
+        "pending": ("success", "Eligible – added to Pending Approval."),
+        "duplicate_review": ("warning", "Eligible, but it looks very similar to a job you already have – added to "
+                                        "Possible duplicates in Pending Approval."),
+        "duplicate": ("info", "You already have this job (or ignored/applied to it earlier), so it was not added again."),
+        "unverified": ("warning", "Not added: key eligibility information is ambiguous or missing."),
+        "rejected": ("error", "Not added: it does not meet your eligibility rules."),
+        "flagged": ("warning", "Not added: the match could not be validated."),
+    }
+    kind, text = messages.get(result.outcome, ("info", f"Outcome: {result.outcome}"))
+    getattr(st, kind)(f"**{text}**  \nReason: {result.reason}")
+    if result.outcome in ("pending", "duplicate_review"):
+        if st.button("Open Pending Approval →", type="primary"):
+            st.session_state["page"] = "Pending Approval"
+            st.rerun()
+
+
+def _render_search(db) -> None:
     repo = SettingsRepository(db)
     s = repo.search_settings()
     registry = SourceRegistry(db)
