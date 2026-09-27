@@ -8,7 +8,7 @@ font = "sans serif"
 [server]
 maxUploadSize = 5
 # Only reachable from this computer (the app holds your resume). Remove to share on your network.
-address = "localhost"
+address = "127.0.0.1"
 # Open the browser automatically when the app starts.
 headless = false
 
