@@ -59,6 +59,19 @@ def render(db) -> None:
                                    "allow_resume_to_llm": allow_resume})
         st.toast("Settings saved.", icon="✅")
 
+    st.subheader("Claude API key")
+    from config.secrets import SecretError, current, mask, save_secret
+
+    with st.form("anthropic-key"):
+        key = st.text_input(f"Anthropic API key · {mask(current('ANTHROPIC_API_KEY'))}", type="password",
+                            placeholder="sk-ant-…", help="Stored only in the .env file on this computer.")
+        if st.form_submit_button("Save key") and key.strip():
+            try:
+                save_secret("ANTHROPIC_API_KEY", key)
+                st.success("Saved – Claude explanations are enabled for the next search.")
+            except SecretError as exc:
+                st.error(str(exc))
+
     st.subheader("Retrieval setup check")
     status = check_embedding_setup(env.embedding_backend, env.embedding_model)
     (st.success if status.ok else st.warning)(

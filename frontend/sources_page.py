@@ -40,6 +40,8 @@ def render(db) -> None:
                 st.markdown(f"[Provider terms / docs]({info.terms_url})")
             if entry.get("last_error") and not restricted:
                 st.error(entry["last_error"], icon="⚠️")
+            if info.secret_fields:
+                _key_form(name, info.secret_fields)
             if info.config_fields:
                 config = dict(entry.get("config") or {})
                 with st.form(f"cfg-{name}"):
@@ -59,3 +61,27 @@ def render(db) -> None:
                     st.error(f"{result.status}: {result.error}")
                 else:
                     st.success(f"Working – {len(result.listings)} listings returned by a test query.")
+
+
+def _key_form(name: str, fields: dict[str, str]) -> None:
+    """Enter API keys here; they are written to the local .env file only."""
+    from config.secrets import SecretError, current, mask, save_secret
+
+    with st.form(f"keys-{name}"):
+        st.markdown("**🔑 API keys** – stored only in the `.env` file on this computer")
+        values = {}
+        for env_name, label in fields.items():
+            values[env_name] = st.text_input(f"{label} · {mask(current(env_name))}", type="password",
+                                             key=f"secret-{env_name}", placeholder="paste key here")
+        if st.form_submit_button("Save keys"):
+            saved = []
+            for env_name, value in values.items():
+                if not value.strip():
+                    continue
+                try:
+                    save_secret(env_name, value)
+                    saved.append(env_name)
+                except SecretError as exc:
+                    st.error(f"{env_name}: {exc}")
+            if saved:
+                st.success("Saved. Now switch **Enabled** on and press **Test connection** – no restart needed.")

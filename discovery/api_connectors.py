@@ -197,6 +197,7 @@ class AdzunaConnector(SourceAdapter):
                      "evidence is often incomplete and such overseas jobs stay unverified.",
         requires_credentials=True,
         config_fields={"countries": "Comma-separated Adzuna country codes, e.g. in,gb,de,nl,fr"},
+        secret_fields={"ADZUNA_APP_ID": "Adzuna Application ID", "ADZUNA_APP_KEY": "Adzuna Application Key"},
         terms_url="https://developer.adzuna.com/overview",
     )
 
@@ -281,6 +282,8 @@ class JoobleConnector(SourceAdapter):
         access_notes="Free key per country, set as JOOBLE_API_KEY_IN (India), JOOBLE_API_KEY_UK, … in .env. Free "
                      "plan = 500 requests per key in total, so requests are budgeted and cached for 12 h.",
         requires_credentials=True,
+        secret_fields={"JOOBLE_API_KEY_IN": "Jooble API key – India (in.jooble.org)",
+                       "JOOBLE_API_KEY_UK": "Jooble API key – UK (uk.jooble.org, optional)"},
         config_fields={
             "countries": "Country codes with a key in .env, comma-separated: in, uk, ie, de, fr, nl, ae, us",
             "locations": "Optional search locations for India, comma-separated (default: India). "

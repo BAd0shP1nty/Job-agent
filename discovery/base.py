@@ -77,6 +77,7 @@ class ConnectorInfo:
     enabled_by_default: bool = False
     requires_credentials: bool = False
     config_fields: dict[str, str] = field(default_factory=dict)   # key -> help text
+    secret_fields: dict[str, str] = field(default_factory=dict)   # env var name -> label (entered in the GUI)
     terms_url: str | None = None
 
 

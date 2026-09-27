@@ -141,3 +141,23 @@ def test_add_a_job_you_found_from_gui(ui_db):
     assert any("added to Pending Approval" in s.value for s in at.success)
     job = JobRepository(ui_db).list_by_status("pending")[0]
     assert job["source_name"] == "manual:naukri.com"
+
+
+def test_enter_adzuna_key_in_gui(ui_db, tmp_path, monkeypatch):
+    import os
+
+    import config.secrets as secrets
+
+    monkeypatch.setattr(secrets, "ENV_FILE", tmp_path / ".env")
+    monkeypatch.delenv("ADZUNA_APP_ID", raising=False)
+    monkeypatch.delenv("ADZUNA_APP_KEY", raising=False)
+    at = goto(app(), "Sources & Connectors")
+    at.text_input(key="secret-ADZUNA_APP_ID").set_value("myappid1")
+    at.text_input(key="secret-ADZUNA_APP_KEY").set_value("myappkey0123456789")
+    next(b for b in at.button if b.label == "Save keys" and "adzuna" in str(b.form_id)).click().run()
+    assert not at.exception, at.exception
+    assert "ADZUNA_APP_ID=myappid1" in (tmp_path / ".env").read_text()
+    assert os.environ["ADZUNA_APP_KEY"] == "myappkey0123456789"
+    assert "myappkey0123456789" not in markdown_text(at)
+    os.environ.pop("ADZUNA_APP_ID", None)
+    os.environ.pop("ADZUNA_APP_KEY", None)
